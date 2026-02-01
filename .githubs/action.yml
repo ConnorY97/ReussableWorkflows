@@ -1,0 +1,56 @@
+name: 'Build Godot Project'
+description: 'A composite action to build a Godot project with export templates'
+inputs:
+  godot_version:
+    description: 'The version of Godot to use.'
+    required: true
+    default: '4.6'
+  export_preset:
+    description: 'The export preset to use (e.g., Windows Desktop).'
+    required: true
+    default: 'Windows Desktop'
+  export_dir:
+    description: 'The directory to store the exported files.'
+    required: true
+    default: 'build/windows'
+  export_exe:
+    description: 'The name of the exported executable.'
+    required: true
+    default: 'FMOD-Test.exe'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y unzip wget
+
+    - name: Download Godot Linux
+      run: |
+        wget https://github.com/godotengine/godot/releases/download/${{ inputs.godot_version }}-stable/Godot_v${{ inputs.godot_version }}-stable_linux.x86_64.zip
+        unzip Godot_v${{ inputs.godot_version }}-stable_linux.x86_64.zip -d godot
+        chmod +x godot/Godot_v${{ inputs.godot_version }}-stable_linux.x86_64
+
+    - name: Download Godot export templates
+      run: |
+        mkdir -p ~/.local/share/godot/export_templates/${{ inputs.godot_version }}.stable
+        wget -O Godot_v${{ inputs.godot_version }}-stable_export_templates.tpz \
+          https://github.com/godotengine/godot/releases/download/${{ inputs.godot_version }}-stable/Godot_v${{ inputs.godot_version }}-stable_export_templates.tpz
+        unzip -o Godot_v${{ inputs.godot_version }}-stable_export_templates.tpz -d ~/.local/share/godot/export_templates/${{ inputs.godot_version }}.stable
+
+        # Fix folder structure for Windows exports
+        mv ~/.local/share/godot/export_templates/${{ inputs.godot_version }}.stable/templates/windows_debug_x86_64.exe \
+          ~/.local/share/godot/export_templates/${{ inputs.godot_version }}.stable/windows_debug_x86_64.exe
+        mv ~/.local/share/godot/export_templates/${{ inputs.godot_version }}.stable/templates/windows_release_x86_64.exe \
+          ~/.local/share/godot/export_templates/${{ inputs.godot_version }}.stable/windows_release_x86_64.exe
+
+    - name: Export Windows build
+      run: |
+        mkdir -p ${{ inputs.export_dir }}
+        godot/Godot_v${{ inputs.godot_version }}-stable_linux.x86_64 --headless --export-release "${{ inputs.export_preset }}" "${{ inputs.export_dir }}/${{ inputs.export_exe }}"
+        ls -l ${{ inputs.export_dir }}
+
+    - name: Upload Windows build
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: ${{ inputs.export_dir }}
